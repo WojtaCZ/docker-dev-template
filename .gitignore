@@ -1,0 +1,23 @@
+# Host-side Claude state should never be committed into the template
+.claude/projects/
+.claude/memory/
+.claude/.credentials.json
+.claude.json
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+*.swp
+*~
+.idea/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
