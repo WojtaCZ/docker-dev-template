@@ -113,3 +113,37 @@ claude --dangerously-skip-permissions
 ```
 
 Running as `dev` (UID 1000), not root — safe to use the skip-permissions flag since the container is already an isolation boundary.
+
+## Headless CLI (no VSCode)
+
+Helper scripts build the image and drop you into a shell with all mounts and SSH agent forwarding set up:
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\dev-up.ps1                              # workspace = current dir
+.\scripts\dev-up.ps1 -Workspace C:\code\my-proj   # mount a specific project
+.\scripts\dev-up.ps1 -Rebuild                     # force clean rebuild
+.\scripts\dev-up.ps1 -NoBuild                     # skip build, just run
+```
+
+**Linux / macOS:**
+```bash
+./scripts/dev-up.sh                   # workspace = $(pwd)
+./scripts/dev-up.sh ~/code/my-proj    # mount a specific project
+DEV_REBUILD=1 ./scripts/dev-up.sh     # force clean rebuild
+DEV_NO_BUILD=1 ./scripts/dev-up.sh    # skip build, just run
+```
+
+Both scripts mount `~/.claude.json` + `~/.claude/` (shared auth & history) and forward the host SSH agent via Docker Desktop's magic socket (`/run/host-services/ssh-auth.sock`). On Windows this requires the **OpenSSH Authentication Agent** service to be running; on macOS Docker Desktop wires it up automatically; on Linux it uses `$SSH_AUTH_SOCK` from the host shell.
+
+**Aliasing for convenience:**
+
+Windows — add to your PowerShell profile (`$PROFILE`):
+```powershell
+function dev-up { & C:\Users\you\Documents\docker-dev-template\scripts\dev-up.ps1 @args }
+```
+
+Linux/macOS — add to `~/.bashrc` or `~/.zshrc`:
+```bash
+alias dev-up='~/Documents/docker-dev-template/scripts/dev-up.sh'
+```
