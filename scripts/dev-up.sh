@@ -9,6 +9,7 @@
 #   DEV_IMAGE=<name>      image tag             (default: dev-template-baseline)
 #   DEV_CONTAINER=<name>  running container name (default: dev-template)
 #   DEV_NO_BUILD=1        skip docker build
+#   DEV_NO_PULL=1         don't `--pull` the base image (offline / pin)
 #   DEV_REBUILD=1         docker build --no-cache
 
 set -euo pipefail
@@ -20,7 +21,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [ "${DEV_NO_BUILD:-0}" != "1" ]; then
     BUILD_FLAGS=()
-    [ "${DEV_REBUILD:-0}" = "1" ] && BUILD_FLAGS+=("--no-cache")
+    [ "${DEV_NO_PULL:-0}" != "1" ] && BUILD_FLAGS+=("--pull")
+    [ "${DEV_REBUILD:-0}" = "1" ]  && BUILD_FLAGS+=("--no-cache")
     docker build "${BUILD_FLAGS[@]}" -t "$IMAGE_NAME" "$REPO_ROOT"
 fi
 

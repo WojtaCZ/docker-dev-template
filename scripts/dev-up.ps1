@@ -14,6 +14,9 @@
 .PARAMETER NoBuild
     Skip `docker build` and just run the existing image.
 
+.PARAMETER NoPull
+    Skip `--pull` (don't refresh base image layers). Useful offline or when pinning.
+
 .PARAMETER Rebuild
     Force `docker build --no-cache` for a clean rebuild.
 
@@ -28,16 +31,19 @@ param(
     [string]$ImageName = "dev-template-baseline",
     [string]$ContainerName = "dev-template",
     [switch]$NoBuild,
+    [switch]$NoPull,
     [switch]$Rebuild
 )
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-if ($Rebuild) {
-    docker build --no-cache -t $ImageName $repoRoot
-} elseif (-not $NoBuild) {
-    docker build -t $ImageName $repoRoot
+if (-not $NoBuild) {
+    $buildFlags = @()
+    if (-not $NoPull) { $buildFlags += "--pull" }
+    if ($Rebuild)     { $buildFlags += "--no-cache" }
+    docker build @buildFlags -t $ImageName $repoRoot
+    if ($LASTEXITCODE -ne 0) { throw "docker build failed" }
 }
 
 $claudeJson = Join-Path $env:USERPROFILE ".claude.json"

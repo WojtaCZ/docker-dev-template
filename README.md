@@ -72,19 +72,55 @@ The placeholder `.gitkeep` files keep the dirs in git until you drop skill conte
 
 ## Building a specialised image
 
+Specialised containers inherit everything baked into the baseline by using it as their `FROM` image. Any change you push here flows to every downstream image on its next `docker build --pull`.
+
+### How propagation works
+
+1. **Push** a change to this repo (`main`).
+2. The **`publish.yml`** GitHub Action rebuilds the image and pushes to GHCR at `ghcr.io/wojtacz/docker-dev-template` with tags:
+   - `latest`       — rolling, tracks `main`
+   - `main-<sha>`   — immutable, per commit
+   - `vX.Y.Z`, `vX.Y` — on git tags, for pinned releases
+3. A specialised Dockerfile does `FROM ghcr.io/wojtacz/docker-dev-template:latest`.
+4. Its `dev-up.sh`/`.ps1` runs `docker build --pull`, which **refreshes the base layer** before rebuilding on top. Updated skills, scripts, MCP config, and toolchain all propagate.
+
+### Example specialised Dockerfile
+
 ```Dockerfile
 FROM ghcr.io/wojtacz/docker-dev-template:latest
 
-# Add toolchain
+# Extra toolchain
+USER root
 RUN pacman -Syu --noconfirm && \
-    pacman -S --noconfirm --needed arm-none-eabi-gcc openocd gdb-multiarch stlink
+    pacman -S --noconfirm --needed \
+        arm-none-eabi-gcc arm-none-eabi-newlib \
+        openocd gdb-multiarch stlink cmake ninja picocom dfu-util \
+    && pacman -Scc --noconfirm
+USER dev
 
-# Ship container-specific skills/agents/MCP config
+# Stack additional skills/agents on top of the baseline.
+# Use distinct subdir names to avoid overwriting baseline skills; reuse a
+# baseline skill's dir name only if you intentionally want to override it.
 COPY --chown=dev:dev skills/    /home/dev/.claude/skills/
 COPY --chown=dev:dev agents/    /home/dev/.claude/agents/
-COPY --chown=dev:dev commands/  /home/dev/.claude/commands/
+
+# If you need to merge MCP servers, ship a complete settings.json that
+# includes baseline servers plus specialisation-specific ones.
 COPY --chown=dev:dev settings.json /home/dev/.claude/settings.json
 ```
+
+### Pinning vs. rolling
+
+- **`latest`** — zero-friction propagation. Good for personal dev templates where you want every fix immediately. Trade-off: a bad commit in base breaks every downstream until reverted.
+- **`vX.Y.Z`** — immutable pin. Use in shared/production templates. Bump the tag in each specialised repo when you want to adopt a new baseline. Pair with **Renovate** or **Dependabot** to auto-open PRs when a new tag lands.
+
+### Triggering downstream rebuilds automatically
+
+Two common setups, in increasing order of plumbing:
+
+1. **On-demand** (simplest) — developer runs `dev-up.sh` / `.ps1`; the built-in `--pull` picks up new base layers.
+2. **Renovate PRs** — add a `renovate.json` to each specialised repo pinning `ghcr.io/wojtacz/docker-dev-template` — Renovate opens a PR whenever a new tag publishes.
+3. **Fan-out dispatch** — the base repo's workflow fires a `repository_dispatch` event at each specialised repo after a successful publish, triggering their own rebuild workflow.
 
 ## Git / SSH
 
