@@ -47,3 +47,18 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Fan out to downstream images so they rebuild against the fresh base layer.
+      # Requires DOWNSTREAM_DISPATCH_PAT secret (fine-grained PAT, Contents:Write
+      # on docker-dev-embedded-base and docker-dev-embedded-telink).
+      - name: Notify embedded-base
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: gh api repos/wojtacz/docker-dev-embedded-base/dispatches -f event_type=base-image-updated
+        env:
+          GH_TOKEN: ${{ secrets.DOWNSTREAM_DISPATCH_PAT }}
+
+      - name: Notify telink leaf (direct — does not go through embedded-base)
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: gh api repos/WojtaCZ/-docker-dev-embedded-telink/dispatches -f event_type=template-image-updated
+        env:
+          GH_TOKEN: ${{ secrets.DOWNSTREAM_DISPATCH_PAT }}
