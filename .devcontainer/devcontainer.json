@@ -2,21 +2,22 @@
     "name": "dev-template-baseline",
     "build": {
         "context": "..",
-        "dockerfile": "../Dockerfile"
+        "dockerfile": "../Dockerfile",
+        "args": {
+            "BASE_TAG": "${localEnv:DEV_CHANNEL:latest}"
+        }
     },
     "remoteUser": "dev",
     "workspaceFolder": "/workspace",
     "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
-
     "mounts": [
         "source=${localEnv:HOME}/.claude.json,target=/host-claude-auth.json,type=bind",
         "source=${localEnv:HOME}/.claude,target=/host-claude-dir,type=bind"
     ],
-
-    "runArgs": ["--init"],
-
-    "postCreateCommand": "bash /usr/local/bin/post-create.sh",
-
+    "runArgs": [
+        "--init"
+    ],
+    "postCreateCommand": "bash /usr/local/bin/post-create.sh && dev-doctor || true",
     "customizations": {
         "vscode": {
             "extensions": [
@@ -29,5 +30,8 @@
                 "terminal.integrated.defaultProfile.linux": "bash"
             }
         }
+    },
+    "remoteEnv": {
+        "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
     }
 }

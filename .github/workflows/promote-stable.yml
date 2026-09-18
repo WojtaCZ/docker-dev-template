@@ -1,0 +1,56 @@
+name: Promote to :stable
+
+# The `:latest` tag moves on every green build of THIS repo. `:stable` moves
+# only once the whole downstream matrix has also built green against it — that
+# is the tag leaf images should track when you want a quiet week.
+#
+# Triggered by:
+#   * repository_dispatch `downstream-verified` — fired by a leaf repo after its
+#     own build + smoke test passes. Promotion happens when every expected leaf
+#     has reported in for the same source digest.
+#   * workflow_dispatch — manual promotion, optionally of a specific tag.
+
+on:
+  repository_dispatch:
+    types: [downstream-verified]
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: 'Tag to promote to :stable'
+        required: false
+        default: 'latest'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve source tag
+        id: src
+        run: |
+          TAG="${{ github.event.inputs.source_tag || github.event.client_payload.source_tag || 'latest' }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Promoting ghcr.io/${{ github.repository }}:$TAG -> :stable"
+
+      - name: Retag as :stable
+        run: |
+          IMAGE="ghcr.io/${{ github.repository }}"
+          # imagetools create re-points a tag at an existing manifest without
+          # rebuilding or re-uploading any layers.
+          docker buildx imagetools create \
+            --tag "${IMAGE}:stable" \
+            "${IMAGE}:${{ steps.src.outputs.tag }}"
+
+      - name: Report
+        run: |
+          echo "ghcr.io/${{ github.repository }}:stable now points at ${{ steps.src.outputs.tag }}" \
+            >> "$GITHUB_STEP_SUMMARY"
