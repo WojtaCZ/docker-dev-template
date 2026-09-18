@@ -103,12 +103,16 @@ Env knobs: `DEV_IMAGE`, `DEV_CONTAINER`, `DEV_NO_BUILD`, `DEV_NO_PULL`, `DEV_REB
 
 ## 4. Verified issues
 
-| # | Severity | Finding |
-| --- | --- | --- |
-| T1 | Low | `claude update` runs on **every** container start. On a cold `docker run` loop that is a network round-trip per launch. Gate it behind `DEV_SKIP_UPDATE`. |
-| T2 | Low | `settings.json` is duplicated verbatim into every descendant (each leaf re-declares all four baseline MCPs). Adding one baseline MCP means editing five repos. See §5.1. |
-| T3 | Low | The `dev` UID is fixed at build time (`ARG USER_UID=1000`). If the host user is not UID 1000, files written into `/workspace` get the wrong owner. |
-| T4 | Info | `FROM archlinux:latest` + `pacman -Syu` means **no reproducibility**: two builds a week apart produce different toolchains. Acceptable for a dev container, but a green CI build is not evidence that today's build is green. |
+Findings from the 2026-09-02 review. T1-T3 have since been implemented and
+verified by the CI smoke test; they are kept here as a record of what the
+current design is answering.
+
+| # | Severity | Finding | Status |
+| --- | --- | --- | --- |
+| T1 | Low | `claude update` runs on **every** container start. On a cold `docker run` loop that is a network round-trip per launch. | **Resolved** — gated behind `DEV_SKIP_UPDATE=1` in `entrypoint.sh`. CI sets it. |
+| T2 | Low | `settings.json` is duplicated verbatim into every descendant (each leaf re-declares all four baseline MCPs). Adding one baseline MCP means editing five repos. | **Resolved** — each image now drops one fragment into `~/.claude-layers/` and `entrypoint.sh` deep-merges them with `jq`. A leaf declares only what it adds. |
+| T3 | Low | The `dev` UID is fixed at build time (`ARG USER_UID=1000`). If the host user is not UID 1000, files written into `/workspace` get the wrong owner. | **Resolved** — pass `HOST_UID`/`HOST_GID` and phase 1 of `entrypoint.sh` remaps before dropping privileges. Covered by the "UID remap path" smoke test. |
+| T4 | Info | `FROM archlinux:latest` + `pacman -Syu` means **no reproducibility**: two builds a week apart produce different toolchains. Acceptable for a dev container, but a green CI build is not evidence that today's build is green. | **Open, by design.** The weekly scheduled rebuild makes the drift visible on a fixed cadence rather than whenever someone happens to build. |
 
 ## 5. Proposed features
 
