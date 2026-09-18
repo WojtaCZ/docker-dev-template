@@ -80,19 +80,26 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Fan out to downstream images so they rebuild against the fresh base layer.
-      # Requires DOWNSTREAM_DISPATCH_PAT secret (fine-grained PAT with
-      # Contents:Write on every repo listed below).
+      # The image is already published by this point, so a failed fan-out must
+      # not fail the run: it means downstream images rebuild late, not that this
+      # one is bad. Each dispatch is independent and warns for itself.
       - name: Notify downstream images
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.DOWNSTREAM_DISPATCH_PAT }}
         run: |
-          # embedded-base fans out further to arm + wch on its own.
-          gh api repos/WojtaCZ/docker-dev-embedded-base/dispatches \
-             -f event_type=base-image-updated
-          # These two inherit from the template directly.
-          gh api repos/WojtaCZ/docker-dev-embedded-telink/dispatches \
-             -f event_type=template-image-updated
-          gh api repos/WojtaCZ/docker-dev-web/dispatches \
-             -f event_type=template-image-updated
+          # embedded-base fans out further to arm + wch on its own; the other two
+          # inherit from this image directly.
+          for repo in docker-dev-embedded-base docker-dev-embedded-telink docker-dev-web; do
+            if [ "$repo" = "docker-dev-embedded-base" ]; then
+              ev=base-image-updated
+            else
+              ev=template-image-updated
+            fi
+            if gh api "repos/WojtaCZ/$repo/dispatches" -f event_type="$ev" >/dev/null; then
+              echo "dispatched $ev -> $repo"
+            else
+              echo "::warning::could not dispatch $ev to $repo -- DOWNSTREAM_DISPATCH_PAT may lack access to it"
+            fi
+          done
