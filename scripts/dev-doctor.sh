@@ -62,10 +62,10 @@ if [ -s "$HOME/.claude/settings.json" ]; then
         n=$(jq -r '.mcpServers | length // 0' "$HOME/.claude/settings.json")
         emit OK "claude-settings" "valid JSON, ${n} MCP server(s)"
     else
-        emit FAIL "claude-settings" "~/.claude/settings.json is not valid JSON"
+        emit FAIL "claude-settings" "$HOME/.claude/settings.json is not valid JSON"
     fi
 else
-    emit WARN "claude-settings" "~/.claude/settings.json missing or empty"
+    emit WARN "claude-settings" "$HOME/.claude/settings.json missing or empty"
 fi
 
 # CLAUDE.md was produced by the memory-layer concatenation. This is the image's
@@ -73,9 +73,9 @@ fi
 # installed on every session.
 if [ -s "$HOME/.claude/CLAUDE.md" ]; then
     layers=$(ls "$HOME/.claude-memory-layers" 2>/dev/null | tr '\n' ' ')
-    emit OK "claude-memory" "~/.claude/CLAUDE.md assembled from: ${layers:-unknown}"
+    emit OK "claude-memory" "$HOME/.claude/CLAUDE.md assembled from: ${layers:-unknown}"
 else
-    emit WARN "claude-memory" "~/.claude/CLAUDE.md missing — tool inventory unavailable to Claude"
+    emit WARN "claude-memory" "$HOME/.claude/CLAUDE.md missing — tool inventory unavailable to Claude"
 fi
 
 # Every MCP server's launcher must at least exist

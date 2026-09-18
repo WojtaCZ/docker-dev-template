@@ -23,7 +23,7 @@ sudo -n true 2>/dev/null || fail "dev cannot sudo without a password"
 pass "passwordless sudo works"
 
 echo "== claude config layering =="
-[ -d "$HOME/.claude-layers" ] || fail "~/.claude-layers missing"
+[ -d "$HOME/.claude-layers" ] || fail "$HOME/.claude-layers missing"
 [ -f "$HOME/.claude-layers/00-baseline.json" ] || fail "baseline layer not installed"
 pass "layer dir present: $(ls "$HOME/.claude-layers" | tr '\n' ' ')"
 
@@ -47,7 +47,7 @@ done < <(jq -r '.mcpServers // {} | to_entries[] | "\(.key)\t\(.value.command)"'
 
 echo "== claude skills/agents/commands dirs exist =="
 for d in skills agents commands; do
-    [ -d "$HOME/.claude/$d" ] || fail "~/.claude/$d missing"
+    [ -d "$HOME/.claude/$d" ] || fail "$HOME/.claude/$d missing"
     pass "$d/"
 done
 
@@ -64,10 +64,10 @@ pass "dev-doctor clean"
 
 echo "== CLAUDE.md memory layers assembled =="
 M="$HOME/.claude/CLAUDE.md"
-[ -d "$HOME/.claude-memory-layers" ] || fail "~/.claude-memory-layers missing"
-for l in 00-baseline.md; do
-    [ -f "$HOME/.claude-memory-layers/$l" ] || fail "memory layer $l not installed"
-done
+[ -d "$HOME/.claude-memory-layers" ] || fail "$HOME/.claude-memory-layers missing"
+# The template ships exactly one memory layer; downstream images add their own
+# and check for them in their own smoke tests.
+[ -f "$HOME/.claude-memory-layers/00-baseline.md" ] || fail "memory layer 00-baseline.md not installed"
 pass "memory layers present: $(ls "$HOME/.claude-memory-layers" | tr '\n' ' ')"
 [ -s "$M" ] || fail "entrypoint did not assemble ~/.claude/CLAUDE.md"
 grep -q "MAINTENANCE RULE" "$M" || fail "merged CLAUDE.md is missing this image's layer (MAINTENANCE RULE)"
