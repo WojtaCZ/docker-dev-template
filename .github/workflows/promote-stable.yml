@@ -1,24 +1,29 @@
 name: Promote to :stable
 
 # The `:latest` tag moves on every green build of THIS repo. `:stable` moves
-# only once the whole downstream matrix has also built green against it — that
-# is the tag leaf images should track when you want a quiet week.
+# only once the downstream matrix has also built green against it — that is the
+# tag leaf images should track when you want a quiet week.
 #
 # Triggered by:
-#   * repository_dispatch `downstream-verified` — fired by a leaf repo after its
-#     own build + smoke test passes. Promotion happens when every expected leaf
-#     has reported in for the same source digest.
-#   * workflow_dispatch — manual promotion, optionally of a specific tag.
+#   * schedule — weekly, an hour after the leaves rebuild, and only promotes if
+#     every downstream repo's latest main build actually succeeded.
+#   * workflow_dispatch — manual promotion of a specific tag, no downstream check.
+#
+# There is deliberately no cross-repo dispatch here any more. That needed a PAT,
+# the PAT expired silently, and nothing promoted for months without anyone
+# noticing. Reading each downstream repo's run status needs no credential now
+# that they are public, and it verifies the thing actually cared about rather
+# than trusting a ping to have arrived.
 
 on:
-  repository_dispatch:
-    types: [downstream-verified]
   workflow_dispatch:
     inputs:
       source_tag:
         description: 'Tag to promote to :stable'
         required: false
         default: 'latest'
+  schedule:
+    - cron: '0 6 * * 1'
 
 permissions:
   contents: read
@@ -28,7 +33,30 @@ jobs:
   promote:
     runs-on: ubuntu-latest
     steps:
-      - uses: docker/login-action@v3
+      # A scheduled promotion is only meaningful if the images built FROM this
+      # one are green. A repo that cannot be read counts as not-green: skipping a
+      # promotion is cheap, moving :stable onto an unverified digest is not.
+      - name: Check the downstream matrix
+        id: matrix
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          green=true
+          for repo in docker-dev-embedded-base docker-dev-embedded-arm; do
+            conclusion=$(gh api \
+              "repos/${{ github.repository_owner }}/$repo/actions/workflows/publish.yml/runs?branch=main&status=completed&per_page=1" \
+              --jq '.workflow_runs[0].conclusion // "unknown"' 2>/dev/null || echo unreadable)
+            echo "$repo: $conclusion"
+            [ "$conclusion" = "success" ] || green=false
+          done
+          echo "green=$green" >> "$GITHUB_OUTPUT"
+          if [ "$green" != "true" ]; then
+            echo "::notice::downstream matrix is not green; leaving :stable where it is"
+          fi
+
+      - uses: docker/login-action@v4
+        if: github.event_name != 'schedule' || steps.matrix.outputs.green == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -36,12 +64,14 @@ jobs:
 
       - name: Resolve source tag
         id: src
+        if: github.event_name != 'schedule' || steps.matrix.outputs.green == 'true'
         run: |
-          TAG="${{ github.event.inputs.source_tag || github.event.client_payload.source_tag || 'latest' }}"
+          TAG="${{ github.event.inputs.source_tag || 'latest' }}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Promoting ghcr.io/${{ github.repository }}:$TAG -> :stable"
 
       - name: Retag as :stable
+        if: github.event_name != 'schedule' || steps.matrix.outputs.green == 'true'
         run: |
           IMAGE="ghcr.io/${{ github.repository }}"
           # imagetools create re-points a tag at an existing manifest without
@@ -51,6 +81,7 @@ jobs:
             "${IMAGE}:${{ steps.src.outputs.tag }}"
 
       - name: Report
+        if: github.event_name != 'schedule' || steps.matrix.outputs.green == 'true'
         run: |
           echo "ghcr.io/${{ github.repository }}:stable now points at ${{ steps.src.outputs.tag }}" \
             >> "$GITHUB_STEP_SUMMARY"

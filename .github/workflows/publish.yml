@@ -7,6 +7,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  # Weekly rebuild. This is what keeps the chain fresh: there is no
+  # cross-repo dispatch any more, and a rebuild also picks up Arch package
+  # updates, which a change-triggered build would never do on its own.
+  # Staggered so a parent finishes before its children start (template 03:00, base 04:00, leaves 05:00 UTC Mondays).
+  schedule:
+    - cron: '0 3 * * 1'
 
 permissions:
   contents: read
@@ -79,27 +85,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      # The image is already published by this point, so a failed fan-out must
-      # not fail the run: it means downstream images rebuild late, not that this
-      # one is bad. Each dispatch is independent and warns for itself.
-      - name: Notify downstream images
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.DOWNSTREAM_DISPATCH_PAT }}
-        run: |
-          # embedded-base fans out further to arm + wch on its own; the other two
-          # inherit from this image directly.
-          for repo in docker-dev-embedded-base docker-dev-embedded-telink docker-dev-web; do
-            if [ "$repo" = "docker-dev-embedded-base" ]; then
-              ev=base-image-updated
-            else
-              ev=template-image-updated
-            fi
-            if gh api "repos/WojtaCZ/$repo/dispatches" -f event_type="$ev" >/dev/null; then
-              echo "dispatched $ev -> $repo"
-            else
-              echo "::warning::could not dispatch $ev to $repo -- DOWNSTREAM_DISPATCH_PAT may lack access to it"
-            fi
-          done
